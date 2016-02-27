@@ -51,18 +51,16 @@ SELECT street.osm_id street_id, street.name, interp.osm_id interp_id, interp."ad
 FROM
     planet_osm_line street,
     planet_osm_line interp,
-    planet_osm_polygon boundary,
-    (SELECT ST_Transform(ST_SetSRID(ST_MakeBox2D(ST_Point(%s,%s), ST_Point(%s,%s)), 4326), 900913) box) bbox
+    planet_osm_polygon boundary
 WHERE
     boundary.osm_id = %s
-    AND ST_Contains(bbox.box, interp.way)
     AND ST_Contains(boundary.way, interp.way)
-    AND ST_Intersects(bbox.box, street.way)
+    AND ST_Intersects(boundary.way, street.way)
     AND ST_Contains(ST_Buffer(street.way, 15), interp.way)
     AND interp."addr:interpolation" IS NOT NULL
     AND interp."addr:street" IS NULL
     AND street.highway IS NOT NULL
-''', bbox + [-boundary_relation_id,])
+''', [-boundary_relation_id])
 
 for row in cur:
     street_id, name, interp_id, interp_type, interp_street = row

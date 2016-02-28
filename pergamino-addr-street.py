@@ -35,11 +35,14 @@ bbox = [float(c) for c in match.groups()]
 map_req = requests.get("https://api.openstreetmap.org/api/0.6/map", params={'bbox': ','.join(str(coord) for coord in bbox)})
 
 ways={}
+nodes={}
 
 xml = etree.parse(io.BytesIO(map_req.content))
 for obj in xml.getroot():
-    if obj.tag in ('bounds','node','relation'):
+    if obj.tag in ('bounds','relation'):
         pass
+    elif obj.tag == 'node':
+        nodes[int(obj.attrib['id'])] = obj
     elif obj.tag == 'way':
         ways[int(obj.attrib['id'])] = obj
     else:
@@ -68,8 +71,19 @@ for row in cur:
     if name is None:
         print("Street {} has no name, ignoring {} interp way {}".format(street_id, interp_type, interp_id))
         continue
-    ways[interp_id].append(etree.Element("tag", attrib={"k":"addr:street", "v":name}))
-    ways[interp_id].attrib['action']='modify'
+    interp_way = ways[interp_id]
+    interp_node_ids = [int(elem.attrib['ref']) for elem in interp_way if elem.tag == 'nd']
+    interp_nodes = [nodes[node_id] for node_id in interp_node_ids]
+    for node in interp_nodes:
+        if any(elem.tag == 'tag' and elem.attrib['k'] == 'addr:housenumber' for elem in node):
+            node.append(etree.Element("tag", attrib={"k":"addr:street", "v":name}))
+            node.attrib['action']='modify'
+
+    for elem in interp_way:
+        if elem.tag == 'tag' and elem.attrib['k'] == 'addr:street':
+            interp_way.remove(elem)
+            interp_way.attrib['action'] = 'modify'
+
 
 xml.write(open("map-modif.xml", "wb"))
 
